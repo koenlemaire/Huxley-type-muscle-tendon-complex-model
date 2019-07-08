@@ -1,75 +1,77 @@
 function [ dstatedt,varargout ] = hux_tutorial( t,state,parms )
 %function [ dstatedt,out,check,x,n,dndt ] = hux_tutorial( t,state,parms )
-%   INPUT: state [n q lce]
-%   OUTPUT: time derivitave of state
+%   INPUT: state [n gamma lce]
+%   OUTPUT: dstatedt: time derivitave of state
 %   (output args 2-6 are optional)
 %   out: [stim gamma fce fpe fse lmtc lmtcdot Edot];
 %   check: [dfcedt dfpedt dfsedt regime clrX(1) clrX(end)]
 %   x, n and dndt: only the relevant entries of the respective vectors
 %
-% Huxley model modified from Zahalak (1981) eq. 3:
+% Huxley cross bridge dynamics modified from Zahalak (1981) eq. 3:
 % (dndt)x - v*(dndx)t = q*fisom*f(x) - [f(x) + g(x)]*n                      (1)
-% parametrisation by methods of characteristics results in
+% parametrisation by methods of characteristics with definitions:
 % a(x,t) = v(t);
 % b(x,t) = 1;
 % c(x,t) = -[f(x,t) + g(x)];
 % d(x,t) = q*fisom*f(x)
-% the system is then transformed into 3 ODE's:
+% the system is transformed into 3 ODE's:
 % dxds = a(x,t) = v(t), x(0) = x0;
 % dtds = b(x,t) = 1, t(0) = t0;
 % dnds = c(x,t)*n + d(x,t) = -[f(x,t) + g(x)]*n + q*fisom*f(x), n(0) = u0.
-% the second one is dumped because t = s. x0 is the initial domain of n, n0
-% is the inital state of n. For details not listed here, please see the
-% functions called within this function.
+% the second equation is dumped because t = s. x0 is the initial domain of
+% n, n0 is the inital state of n. For details not listed here, please see
+% the functions called within this function.
 %
-% This file released under the terms of the GNU General Public License,
-% version 3. See http://www.gnu.org/licenses/gpl.html 
-% Author: KK Lemaire (kklemaire_edu@posteo.nl)
-
 % The complete model is described in:
 % Lemaire, K. K., Baan, G. C., Jaspers, R. T., & van Soest, A. J. (2016).
 % Comparison of the validity of Hill and Huxley muscle tendon complex
 % models using experimental data obtained from rat m. Soleus in situ.
 % Journal of Experimental Biology, 219, 977-987. DOI: 10.1242/jeb.128280   
 
+% This file released under the terms of the GNU General Public License,
+% version 3. See http://www.gnu.org/licenses/gpl.html 
+% Author: KK Lemaire (kklemaire_edu@posteo.nl)
 
-%% unravel state
+%% unravel state vector
 state=state(:);
-n = state(1:end-4);
-gamma = state(end-3);
-lce = state(end-2);
-lmtc=state(end-1);
-lmtcd=state(end);
+n = state(1:end-4); % [] fraction of bound cross bridges
+gamma = state(end-3); % [] relative free Ca2+ concentration
+lce = state(end-2); % [m] contractile element length
+lmtc=state(end-1); % [m] muscle tendon complex length
+lmtcd=state(end); % [m/s] time derivative 
 %% read out parameters
 scale_factor = parms.scale_factor; % [] scale factor between lcerel and x
 x0 = parms.x0; % initial vector x0 at t=0
 lce0 = parms.lce0; % [m] ce length at t=0
 lceopt = parms.lceopt; % [m] optimum ce length
 dndt = parms.dndt; % =zeros(size(x0))
+rateFun=parms.rateFun; % fx/gx rate function
 
-%% calculate model inputs
-if t<=.2
+%% model input
+if t<=.5
     stim=parms.gamma0; % we start in steady state
-elseif t>.2 && t<1.5 % full activation
+elseif t>.5 && t<2 % full activation
     stim=1; 
 else
     stim=0.2; % relaxation to low value
 end
 %% calculate muscle components lengths
-%lse_slack = parms.lse_slack; % [m] SEE slack length
 lcerel=lce./lceopt; % [] relative CE length
 lse = lmtc - lce;  % [m] SE length
 %% calculate gammad and q
-gammad = gammadot(gamma,stim,parms);
-q = activeState(gamma,parms);
-%% create current x vector
+gammad = gammadot(gamma,stim,parms); 
+q = activeState(gamma,parms); % [] relative Ca2+ bound to troponin
+%% create current bond lengths (x) vector
 dlcerel = (lce - lce0)/lceopt; % [] difference of current lce to lce0 scaled to lcerel
-x = x0 + dlcerel*scale_factor; % [] update x0 to current x
+x = x0 + dlcerel*scale_factor; % [] update x0 to current x 
 %% select relevant part of x/n vector
-iRel = x<1.2 & x>-.2 | abs(n)>1e-16; % these are the values where dndt~=0 AND/OR n~=0
+iRel = (x<1.5 & x>-.5) | abs(n)>1e-16; % these are the values where dndt~=0 AND/OR n~=0
 xRel = x(iRel); % define xRel and nRel
 nRel = n(iRel);
 %% check sparsity assumption
+% we need to make sure the distribution does not 'run off', ie the lowest
+% and highest values of the relevant part of x may not exceed the highest
+% and lowest values of the total x vector
 clrX = [xRel(1)-x(1) x(end)-xRel(end)]; % clearance between edges of xRel and x
 if min(clrX) < 1.5 % now we are too close to the edge!
     err=true; 
@@ -77,27 +79,26 @@ else
     err=false;
 end
 %% calculate fisomrel
-[fisomrel] = ce_fl_simple(lcerel,parms);
-%% calculate SE and PE instantanious stiffness
-% see function file for details
-[fse, fpe, kse, kpe] = CEEC_simple2(lse,lce,parms); % [N] and [N/m]
+[fisomrel] = ce_fl_simple(lcerel,parms); % [] relative isometric CE force
+%% calculate SE and PE force and instantanious stiffness
+[fse, fpe, kse, kpe] = CEEC_simple2(lse,lce,parms); % [N N N/m N/m]
 %% calculate f(x), g(x) and dndt
-%parms.hux.f1=parms.hux.f1*q; % enable this line and remove factor q from line dndtRel = ... to set this function to bogus form
-[fx,gx]=rateFunc_v5(xRel(:),parms); % see function for details
-dndtRel=fisomrel*q*fx-(fx+gx).*nRel; % see thesis Koen Lemaire for details, now incorporates both q and fisom
+[fx,gx]=rateFun(xRel(:)); % see function for details
+dndtRel=fisomrel*q*fx-(fx+gx).*nRel; % see Lemaire et al. 2016 for details, now incorporates both q and fisom
 dndt(iRel)=dndtRel; % update dndt with new (nonzero) values
 %% calculate lced
-kf=parms.k_f;
+% help variables:
+kf=parms.k_f; % [N/h] scaling between distribution and force 
 int_nx  = sum(xRel.*nRel)*kf; % CE force [N]
 int_n   = sum(nRel)*kf; % CE stifness [N/h]
 int_dnx = sum(xRel.*dndtRel)*kf; % [N/s]
 
-% now calculate lced (see thesis Koen Lemaire for math details)
+% now calculate lced (see Lemaire et al. 2016 for details)
 lced = (-int_dnx + lmtcd*kse) ./ (int_n*scale_factor/lceopt + kse + kpe); % [m/s]
 
 %% calculate lmtcdd
-Fz=-9.81*parms.mass; % [N]
-lmtcdd=-(fse+Fz)/parms.mass; % [m/s^2] Newton, minus sign as moving up means muscle shortening
+Fz=-9.81*parms.mass; % [N] gravitational force
+lmtcdd=-(fse+Fz)/parms.mass; % [m/s^2] Newtons law, minus sign because moving up means muscle shortening
 
 %% complete stated
 dstatedt = [dndt; gammad; lced; lmtcd; lmtcdd];
@@ -124,13 +125,7 @@ if nargout > 1 || err == true
     end
 end
 if err == true && nargout > 1 % we are not evaluating jacobian!!
-    figure
-    plot(xRel,nRel,xRel,xRel.*nRel,'--')
-    legend('n over x','n*x over x')
-    title('n over x at current integration step')
-    xlabel('x')
-    ylabel('n')
-    warning('sparsity assumption possibly voilated, see figure')
+    warning('sparsity assumption possibly voilated, check results')
     keyboard
 end
 return

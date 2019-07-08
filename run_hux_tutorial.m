@@ -22,8 +22,9 @@ clc
 addpath(genpath(cd)) % make sure all subfunctions are included
 %% set parameters
 % simulation processing:
-diagnostics=true; % figures for checking results
+diagnostics=true; % figures and data for sanity checking results
 normFig=true; % figures for viewing data
+Animate=true; % do animation
 
 % general:
 parms.Fmax=1000; % [N]
@@ -47,14 +48,15 @@ parms.gamma_min=parms.qmin;
 % huxley model:
 h = 1e-8;           % attachment 'range' for myosin head [m]
 s = 2.6e-6;         % sarcomere length [m]
-parms.scale_factor = s/(2*h); % [] scaling between x and lcerel!!
+parms.scale_factor = s/(2*h); % [] scaling between x and lcerel
 parms.dx=.05; % [h] stepsize in x
-parms.g1=100; % [Hz]
-parms.f1=1000; % [Hz]
-parms.g2=3000; % [Hz]
-parms.g3=1400; % [Hz]
+parms.g1=200; % [Hz] detachment rate parameter
+parms.f1=800; % [Hz] attachment rate parameter
+parms.g2=3000; % [Hz] detachment rate parameter
+parms.g3=1400; % [Hz] detachment rate parameter
 
-
+% rate function form; see different supplied functions
+parms.rateFun=@(x)rateFunc_v8(x,parms);
 %% Initial conditions
 
 % -calculate (or set, in this case) lmtc0, fse0 and lse0
@@ -64,10 +66,11 @@ parms.g3=1400; % [Hz]
 % -set n0(x0) to SS distribution, corresponding to q0 and fisom0, thus:
 % n0 = nSS*fisom0*q0
 
-% get F0 and lmtc0 from Casius:
+% set F0 and mass:
 parms.fse0=0.5*parms.Fmax; % [N]
 parms.mass=parms.fse0/9.81; % [kg]
 
+% set lmtc0, activation follows from this
 lmtc0=(1+parms.se_strain)*parms.lse_slack+1.1*parms.lceopt; % [m]
 lmtcd0=0; % [m/s]
 
@@ -109,16 +112,16 @@ parms.gamma0=gamma0;
 lce_L = 0.2*parms.lceopt; % [m] smallest value lce is expected to attain
 lce_R = 1.8*parms.lceopt; % [m] largest value lce is expected to attain
 
-x1 = round((lce0-lce_R)*parms.scale_factor/parms.lceopt); % [h] left bound xi
-x2 = round((lce0-lce_L)*parms.scale_factor/parms.lceopt); % [h] right bound xi
+x1 = round((lce0-lce_R)*parms.scale_factor/parms.lceopt); % [h] left bound x
+x2 = round((lce0-lce_L)*parms.scale_factor/parms.lceopt); % [h] right bound x
 
-% initial state vector for xi, with stepsize dx
+% initial state vector for x, with stepsize dx
 x0 = (x1:parms.dx:x2)';
 parms.x0 = x0; % [h]
 
 % NOTE: n0 is assumed Steady State
 % first compute f0 and g0
-[fx0,gx0]=rateFunc_v5(x0,parms); % [Hz]
+[fx0,gx0]=parms.rateFun(x0(:)); % [Hz]
 
 % ss condition is given by f(f+g)|f(x)>g(x)
 nSS = zeros(length(x0),1); % initiate n0 for indexing by find
@@ -132,6 +135,8 @@ figure;plot(x0,fx0,x0,gx0)
 title('rate parameter functions')
 xlabel('x [h]')
 ylabel('rate [Hz]')
+xlim([-2 2])
+legend('attachment','detachment')
 figure;plot(x0,nSS); axis([-2 2 0 1])
 title('steady state isometric n(x)')
 xlabel('x [h]')
@@ -146,10 +151,10 @@ state0 = [n0' gamma0 lce0 lmtc0 lmtcd0];
 [stated0,y0,check0,xRel0,nRel0,dndtRel0] = hux_tutorial(0,state0,parms);
 t_end=4; % [s] simulation time, starting at t=0 ...
 
-tSpan=[0:.01:t_end];
+tSpan=[0:.01:t_end]; % chop up time to save memory (reduce state vector)
 ode_fun=@(t,state)hux_tutorial(t,state,parms);
-odeparms=odeset('abstol',1e-6,'reltol',1e-6,'maxstep',.02);
-[t,state] = ode113(ode_fun,tSpan,state0,odeparms);
+odeparms=odeset('abstol',1e-8,'reltol',1e-8,'maxstep',.02);
+[t,state] = ode45(ode_fun,tSpan,state0,odeparms);
 
 % unravel state
 n = state(:,1:end-4);
@@ -239,7 +244,6 @@ if diagnostics == true
 end
 
 %% standard output figs
-% hold off
 if normFig==true
     figure
     subplot(221)
@@ -272,5 +276,41 @@ if normFig==true
     legend('w_c_e','w_p_e','w_s_e','w_m_t_c','E_k_i_n','w_F_z')
 end
 
-
-
+%% animation
+if Animate
+    % for video ...
+    % writerObj = VideoWriter('hux_tutorial.avi');
+    % writerObj.FrameRate = 100;
+    % open(writerObj)
+    
+    figure
+    for iSample=1:length(t)
+        plot([-.5 .5]*lmtc0,[0 0],'k','linewidth',1);hold on
+        nline=12;
+        tmp=linspace(-.5*lmtc0,.5*lmtc0,nline);
+        for iLine=1:nline
+            plot([tmp(iLine) tmp(iLine)+.04*lmtc0],[0 .04*lmtc0],'k','linewidth',1)
+        end
+        set(gca, 'Xcolor', 'w', 'Ycolor', 'w')
+        set(gca, 'XTick', []);
+        set(gca, 'YTick', []);
+        box off
+        ylim([-.4 0.1])
+        axis equal
+        text(.01,-.5*lce(iSample),'CE')
+        text(.01,-.5*(lmtc(iSample)+lce(iSample)),'SEE')
+        
+        text(-.13,-.1,['t=',num2str(t(iSample),3)])
+        text(-.17,-.125,['STIM=',num2str(stim(iSample),3)])
+        
+        plot([0 0],[0 -lce(iSample)],'r','linewidth',2);
+        plot([0 0],[-lce(iSample) -lmtc(iSample)],'b','linewidth',2);
+        plot(0,-lmtc(iSample),'ko','linewidth',8); hold off
+        drawnow
+        
+        % for video
+        % currFrame=getframe(gcf);
+        % writeVideo(writerObj,currFrame)
+    end
+    % close(writerObj)
+end
