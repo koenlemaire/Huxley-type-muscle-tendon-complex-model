@@ -65,7 +65,7 @@ q = activeState(gamma,parms); % [] relative Ca2+ bound to troponin
 dlcerel = (lce - lce0)/lceopt; % [] difference of current lce to lce0 scaled to lcerel
 x = x0 + dlcerel*scale_factor; % [] update x0 to current x 
 %% select relevant part of x/n vector
-iRel = (x<1.5 & x>-.5) | abs(n)>1e-16; % these are the values where dndt~=0 AND/OR n~=0
+iRel = (x<2 & x>-1) | abs(n)>1e-16; % these are the values where dndt~=0 AND/OR n~=0
 xRel = x(iRel); % define xRel and nRel
 nRel = n(iRel);
 %% check sparsity assumption

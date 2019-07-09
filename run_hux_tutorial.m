@@ -28,9 +28,9 @@ Animate=true; % do animation
 
 % general:
 parms.Fmax=1000; % [N]
-parms.lceopt=0.05; % [m] CE optimum length
+parms.lceopt=0.07; % [m] CE optimum length
 parms.lpe_slack=1.1*parms.lceopt; % [m] PE slack length
-parms.lse_slack=0.25; % [m] SE slack length
+parms.lse_slack=0.13; % [m] SE slack length
 parms.se_strain=.05; % [N/m^2] SE shape, Fse=Fmax at 4% strain
 parms.pe_strain=.5; % [N/m^2] PE shape, Fpe=0.5*Fmax at 4% strain????
 width=0.56; % [] width of force length relation
@@ -172,13 +172,17 @@ y = zeros(length(y0),length(t));
 if diagnostics == true
     figure
 end
+
 for i=1:length(t)
     [stated(:,i),y(:,i),check(:,i),x,n,dndt] = hux_tutorial(t(i),state(i,:)',parms);
-    if diagnostics==true
+    if diagnostics==true && mod(i-1,5)==0 % every 5 samples
         plot3(x,ones(size(x))*t(i),n);hold on
         xlabel x; ylabel t; zlabel n
     end
 end
+xlim([-3 3])
+ylim([0 t(end)])
+zlim([0 1])
 % handle output
 stated=stated'; y=y';
 gammad = stated(:,end-1);
@@ -295,13 +299,13 @@ if Animate
         set(gca, 'XTick', []);
         set(gca, 'YTick', []);
         box off
-        ylim([-.4 0.1])
+        ylim([-.27 0.02])
         axis equal
-        text(.01,-.5*lce(iSample),'CE')
+        text(.01,-.5*lce(iSample),['CE (STIM=',num2str(stim(iSample),3),')'])
         text(.01,-.5*(lmtc(iSample)+lce(iSample)),'SEE')
         
-        text(-.13,-.1,['t=',num2str(t(iSample),3)])
-        text(-.17,-.125,['STIM=',num2str(stim(iSample),3)])
+        text(-.13,-.07,['t=',num2str(t(iSample),3)])
+        %text(-.15,-.115,['STIM=',num2str(stim(iSample),3)])
         
         plot([0 0],[0 -lce(iSample)],'r','linewidth',2);
         plot([0 0],[-lce(iSample) -lmtc(iSample)],'b','linewidth',2);
