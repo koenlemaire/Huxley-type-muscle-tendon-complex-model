@@ -1,3 +1,4 @@
+%% Huxley MTC model tutorial
 % we are going to simulate a huxley MTC suspended from the ceiling with a
 % mass attached to it. Positive direction is upward (1 mechanical DOF).
 % this version resembles a standard neuromusculoskeletal simulation in
@@ -13,26 +14,29 @@
 % models using experimental data obtained from rat m. Soleus in situ.
 % Journal of Experimental Biology, 219, 977-987. DOI: 10.1242/jeb.128280   
 
-
-
 clear
 close all
 clc
 
+% sort out pathing and stuff
+tmp = mfilename('fullpath');
+tmp = tmp(1:length(tmp)-length(mfilename));
+cd(tmp)
 addpath(genpath(cd)) % make sure all subfunctions are included
 %% set parameters
 % simulation processing:
 diagnostics=true; % figures and data for sanity checking results
 normFig=true; % figures for viewing data
-Animate=true; % do animation
+Animate=true; % do simple animation
 
 % general:
-parms.Fmax=1000; % [N]
+parms.mass=1; % [kg]
+parms.Fmax=2*parms.mass*9.81; %[N]
 parms.lceopt=0.07; % [m] CE optimum length
 parms.lpe_slack=1.1*parms.lceopt; % [m] PE slack length
 parms.lse_slack=0.13; % [m] SE slack length
 parms.se_strain=.05; % [N/m^2] SE shape, Fse=Fmax at 4% strain
-parms.pe_strain=.5; % [N/m^2] PE shape, Fpe=0.5*Fmax at 4% strain????
+parms.pe_strain=.2; % [N/m^2] PE shape, Fpe=0.5*Fmax at 4% strain????
 width=0.56; % [] width of force length relation
 parms.width=width;
 parms.C=-(1/width)^4;
@@ -55,6 +59,10 @@ parms.f1=800; % [Hz] attachment rate parameter
 parms.g2=3000; % [Hz] detachment rate parameter
 parms.g3=1400; % [Hz] detachment rate parameter
 
+% energetics parms scaling: need to fit/optimize these
+parms.c_cb=1; % scale factor between cross bridge uncoupling and metabolic power
+parms.c_act=1; % scale factor between free calcium and metabolic power 
+
 % rate function form; see different supplied functions
 parms.rateFun=@(x)rateFunc_v8(x,parms);
 %% Initial conditions
@@ -66,9 +74,8 @@ parms.rateFun=@(x)rateFunc_v8(x,parms);
 % -set n0(x0) to SS distribution, corresponding to q0 and fisom0, thus:
 % n0 = nSS*fisom0*q0
 
-% set F0 and mass:
+% set Fse0 :
 parms.fse0=0.5*parms.Fmax; % [N]
-parms.mass=parms.fse0/9.81; % [kg]
 
 % set lmtc0, activation follows from this
 lmtc0=(1+parms.se_strain)*parms.lse_slack+1.1*parms.lceopt; % [m]
@@ -123,7 +130,7 @@ parms.x0 = x0; % [h]
 % first compute f0 and g0
 [fx0,gx0]=parms.rateFun(x0(:)); % [Hz]
 
-% ss condition is given by f(f+g)|f(x)>g(x)
+% ss condition is given by f/(f+g)|f(x)>g(x)
 nSS = zeros(length(x0),1); % initiate n0 for indexing by find
 parms.dndt=nSS; % set base for dndt vector!
 
@@ -151,10 +158,12 @@ state0 = [n0' gamma0 lce0 lmtc0 lmtcd0];
 [stated0,y0,check0,xRel0,nRel0,dndtRel0] = hux_tutorial(0,state0,parms);
 t_end=4; % [s] simulation time, starting at t=0 ...
 
-tSpan=[0:.01:t_end]; % chop up time to save memory (reduce state vector)
+tSpan=[0:.001:t_end]; % chop up time to save memory (reduce state vector)
 ode_fun=@(t,state)hux_tutorial(t,state,parms);
 odeparms=odeset('abstol',1e-8,'reltol',1e-8,'maxstep',.02);
+tic
 [t,state] = ode45(ode_fun,tSpan,state0,odeparms);
+toc
 
 % unravel state
 n = state(:,1:end-4);
@@ -188,7 +197,6 @@ stated=stated'; y=y';
 gammad = stated(:,end-1);
 lced = stated(:,end); %[m/s]
 
-
 % unravel y
 Fmax=parms.Fmax;
 stim = y(:,1);
@@ -196,6 +204,9 @@ q = y(:,2);
 fce=y(:,3); %[N]
 fpe=y(:,4); %[N]
 fse=y(:,5); %[N]
+fisomrel=y(:,6); %[]
+p_cb=y(:,7); %[W]
+p_act=y(:,8); %[W]
 fcerel = fce/parms.Fmax;
 fperel = fpe/parms.Fmax;
 fserel = fse/parms.Fmax;
@@ -212,8 +223,6 @@ lmtc_work=cumtrapz(-lmtc,fse); %[J]
 Ekin = .5*parms.mass*lmtcd.^2; %[J]
 Ekin = Ekin-Ekin(1);
 W_grav = -parms.mass*(lmtc-lmtc(1))*-9.81; %[J]
-
-
 
 %% diagnostics
 if diagnostics == true
@@ -273,11 +282,34 @@ if normFig==true
     ylabel('Force [N]')
     grid
     subplot(224)
+    %yyaxis left
     plot(t,[ce_work pe_work se_work lmtc_work Ekin W_grav])
-    title('mechanical energy work')
-    ylabel [J]
+    title('mechanical energy/work')
+    ylabel ('mechanical work [J]')
     xlabel('Time [s]')
     legend('w_c_e','w_p_e','w_s_e','w_m_t_c','E_k_i_n','w_F_z')
+    
+    figure
+    plot(t,[p_cb/trapz(t,p_cb) p_act/trapz(t,p_act)])
+    title('metabolic power')
+    ylabel ('metabolic power [normalized]')
+    xlabel('Time [s]')
+    legend('P_c_b','P_a_c_t')
+    
+    
+    figure
+    subplot(211)
+    plot(lced,fce,'.')
+    title('CE force vs CE velocity, from simulation result')
+    ylabel ('CE force [N]')
+    xlabel('CE velocity [m/s]')
+    
+    subplot(212)
+    plot(lced,fce./q./fisomrel,'.')
+    title('CE force / (q*Fisom) vs CE velocity, from simulation result')
+    ylabel ('norm CE force [Fce/(q*Fisom)]')
+    xlabel('CE velocity [m/s]')
+    % ! this would be a single curve in a Hill model ! 
 end
 
 %% animation
@@ -288,7 +320,7 @@ if Animate
     % open(writerObj)
     
     figure
-    for iSample=1:length(t)
+    for iSample=1:10:length(t)
         plot([-.5 .5]*lmtc0,[0 0],'k','linewidth',1);hold on
         nline=12;
         tmp=linspace(-.5*lmtc0,.5*lmtc0,nline);

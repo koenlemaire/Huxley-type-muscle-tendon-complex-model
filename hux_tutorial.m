@@ -46,7 +46,8 @@ lce0 = parms.lce0; % [m] ce length at t=0
 lceopt = parms.lceopt; % [m] optimum ce length
 dndt = parms.dndt; % =zeros(size(x0))
 rateFun=parms.rateFun; % fx/gx rate function
-
+c_act=parms.c_act;
+c_cb=parms.c_cb;
 %% model input
 if t<=.5
     stim=parms.gamma0; % we start in steady state
@@ -107,7 +108,10 @@ if nargout > 1 || err == true
     % NOTE: for all output parameters same notes as in "calucalate lced"
     % section holds!!
     fce = int_nx; % [N]
-    varargout{1}=[stim q fce fpe fse];
+    p_act=c_act*gamma; % [W] metabolic power for calcium pumping
+    p_cb=c_cb*sum(gx.*nRel); % [W] metabolic power for CB cycling
+    
+    varargout{1}=[stim q fce fpe fse fisomrel p_cb p_act];
     if nargout>2
         dfcedt = int_dnx + scale_factor*int_n*lced/lceopt; % [N/s]
         dfsedt = kse*(lmtcd-lced); % [N/s]
