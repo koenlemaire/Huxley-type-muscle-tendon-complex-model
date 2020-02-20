@@ -30,8 +30,7 @@ normFig=true; % figures for viewing data
 Animate=true; % do simple animation
 
 % general:
-parms.mass=1; % [kg]
-parms.Fmax=2*parms.mass*9.81; %[N]
+parms.Fmax=1; %[N]
 parms.lceopt=0.07; % [m] CE optimum length
 parms.lpe_slack=1.1*parms.lceopt; % [m] PE slack length
 parms.lse_slack=0.13; % [m] SE slack length
@@ -75,10 +74,11 @@ parms.rateFun=@(x)rateFunc_v8(x,parms);
 % n0 = nSS*fisom0*q0
 
 % set Fse0 :
-parms.fse0=0.5*parms.Fmax; % [N]
+parms.fse0=0.1*parms.Fmax; % [N]
 
 % set lmtc0, activation follows from this
 lmtc0=(1+parms.se_strain)*parms.lse_slack+1.1*parms.lceopt; % [m]
+parms.lmtc0=lmtc0;
 lmtcd0=0; % [m/s]
 
 [lse0]=fzero(@Fse_inverse,parms.lse_slack*[1 (1+parms.se_strain)],[],parms); % [m]
@@ -153,25 +153,25 @@ ylabel('n []')
 k_f=parms.Fmax/(sum(x0.*nSS));
 parms.k_f=k_f; % [N/h]
 %% run simulation
-state0 = [n0' gamma0 lce0 lmtc0 lmtcd0];
+state0 = [n0' gamma0 lce0];
 
-[stated0,y0,check0,xRel0,nRel0,dndtRel0] = hux_tutorial(0,state0,parms);
-t_end=4; % [s] simulation time, starting at t=0 ...
+[stated0,y0,check0,xRel0,nRel0,dndtRel0] = hux_tutorial_kinematic(0,state0,parms);
+t_end=6; % [s] simulation time, starting at t=0 ...
 
 tSpan=[0:.001:t_end]; % chop up time to save memory (reduce state vector)
-ode_fun=@(t,state)hux_tutorial(t,state,parms);
+ode_fun=@(t,state)hux_tutorial_kinematic(t,state,parms);
 odeparms=odeset('abstol',1e-8,'reltol',1e-8,'maxstep',.02);
 tic
 [t,state] = ode45(ode_fun,tSpan,state0,odeparms);
 toc
 
 % unravel state
-n = state(:,1:end-4);
-gamma = state(:,end-3);
-lce= state(:,end-2); % [m]
-lmtc= state(:,end-1); % [m]
-lmtcd= state(:,end); % [m]
-lse=lmtc-lce; % [m]
+n = state(:,1:end-2);
+gamma = state(:,end-1);
+lce= state(:,end); % [m]
+%lmtc= state(:,end-1); % [m]
+%lmtcd= state(:,end); % [m]
+
 
 % initialise stated and optional output
 check = zeros(length(check0),length(t));
@@ -183,7 +183,7 @@ if diagnostics == true
 end
 
 for i=1:length(t)
-    [stated(:,i),y(:,i),check(:,i),x,n,dndt] = hux_tutorial(t(i),state(i,:)',parms);
+    [stated(:,i),y(:,i),check(:,i),x,n,dndt] = hux_tutorial_kinematic(t(i),state(i,:)',parms);
     if diagnostics==true && mod(i-1,5)==0 % every 5 samples
         plot3(x,ones(size(x))*t(i),n);hold on
         xlabel x; ylabel t; zlabel n
@@ -207,6 +207,10 @@ fse=y(:,5); %[N]
 fisomrel=y(:,6); %[]
 p_cb=y(:,7); %[W]
 p_act=y(:,8); %[W]
+lmtc=y(:,9); %[m]
+lmtcd=y(:,10); %[m/s]
+lse=lmtc-lce; % [m]
+
 fcerel = fce/parms.Fmax;
 fperel = fpe/parms.Fmax;
 fserel = fse/parms.Fmax;
@@ -220,9 +224,9 @@ ce_work=cumtrapz(-lce,fce); %[J]
 se_work=cumtrapz(-lse,fse); %[J]
 pe_work=cumtrapz(-lce,fpe); %[J]
 lmtc_work=cumtrapz(-lmtc,fse); %[J]
-Ekin = .5*parms.mass*lmtcd.^2; %[J]
-Ekin = Ekin-Ekin(1);
-W_grav = -parms.mass*(lmtc-lmtc(1))*-9.81; %[J]
+%Ekin = .5*parms.mass*lmtcd.^2; %[J]
+%Ekin = Ekin-Ekin(1);
+%W_grav = -parms.mass*(lmtc-lmtc(1))*-9.81; %[J]
 
 %% diagnostics
 if diagnostics == true
@@ -244,7 +248,7 @@ if diagnostics == true
     xlabel ('time [s]')
     ylabel ('dF_c_e/dt + dF_p_e/dt - dF_s_e/dt [N/s]')
     subplot(223)
-    plot (t,[ce_work+se_work+pe_work-lmtc_work Ekin-W_grav-lmtc_work])
+    plot (t,[ce_work+se_work+pe_work-lmtc_work])
     title('energy errors')
     xlabel ('time [s]')
     ylabel ('energy [J]')
@@ -283,7 +287,7 @@ if normFig==true
     grid
     subplot(224)
     %yyaxis left
-    plot(t,[ce_work pe_work se_work lmtc_work Ekin W_grav])
+    plot(t,[ce_work pe_work se_work lmtc_work])
     title('mechanical energy/work')
     ylabel ('mechanical work [J]')
     xlabel('Time [s]')
@@ -294,7 +298,8 @@ if normFig==true
     title('metabolic power')
     ylabel ('metabolic power [normalized]')
     xlabel('Time [s]')
-    legend('P_c_b','P_a_c_t')    
+    legend('P_c_b','P_a_c_t')
+    
     
     figure
     subplot(221)
