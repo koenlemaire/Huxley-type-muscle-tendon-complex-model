@@ -194,8 +194,8 @@ ylim([0 t(end)])
 zlim([0 1])
 % handle output
 stated=stated'; y=y';
-gammad = stated(:,end-1);
-lced = stated(:,end); %[m/s]
+gammad = stated(:,end-3);
+lced = stated(:,end-2); %[m/s]
 
 % unravel y
 Fmax=parms.Fmax;

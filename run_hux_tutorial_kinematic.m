@@ -358,7 +358,7 @@ if Animate
         
         plot([0 0],[0 -lce(iSample)],'r','linewidth',2);
         plot([0 0],[-lce(iSample) -lmtc(iSample)],'b','linewidth',2);
-        plot(0,-lmtc(iSample),'ko','linewidth',8); hold off
+        plot([-.015 .015],[-lmtc(iSample) -lmtc(iSample)],'k','linewidth',1.5); hold off
         drawnow
         
         % for video
