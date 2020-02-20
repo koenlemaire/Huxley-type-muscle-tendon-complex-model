@@ -64,9 +64,9 @@ end
 
 % mtc length
 if t>=2 && t<4
-    % 2 Hz sinusoid with eq at lmtc0 and amplitude .1*lmtc0
-    lmtc=(1+.1*sin(4*pi*(t-2)))*parms.lmtc0; 
-    lmtcd=0.4*pi*cos(4*pi*(t-2))*parms.lmtc0;
+    % 2 Hz sinusoid with mean at lmtc0 and amplitude 0.15*lmtc0
+    lmtc=(1+0.15*sin(4*pi*(t-2)))*parms.lmtc0; 
+    lmtcd=0.6*pi*cos(4*pi*(t-2))*parms.lmtc0;
 else
     % isometric at lmtc0
     lmtc=parms.lmtc0;

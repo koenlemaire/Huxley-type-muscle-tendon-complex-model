@@ -77,7 +77,7 @@ parms.rateFun=@(x)rateFunc_v8(x,parms);
 parms.fse0=0.1*parms.Fmax; % [N]
 
 % set lmtc0, activation follows from this
-lmtc0=(1+parms.se_strain)*parms.lse_slack+1.1*parms.lceopt; % [m]
+lmtc0=(1+parms.se_strain)*parms.lse_slack+.95*parms.lceopt; % [m]
 parms.lmtc0=lmtc0;
 lmtcd0=0; % [m/s]
 
