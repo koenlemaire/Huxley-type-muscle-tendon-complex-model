@@ -40,23 +40,37 @@ width=0.56; % [] width of force length relation
 parms.width=width;
 parms.C=-(1/width)^4;
 
-% activation dynamics:     %% DONT MATTER FOR INITIAL SS CONDITION
-parms.k=.35; % 50% point in q-gamma relation
-parms.n=2; % curvature in q-gamma relation
-parms.tau_act=0.080; %[s] rising time constant of gamma(stim) dynamics
-parms.tau_deact=0.100; %[s] falling time constant of gamma(stim) dynamics
+% activation dynamics curtin:     %% DONT MATTER FOR INITIAL SS CONDITION
+% parms.k=.35; % 50% point in q-gamma relation
+% parms.n=2; % curvature in q-gamma relation
+% parms.tau_act=0.080; %[s] rising time constant of gamma(stim) dynamics
+% parms.tau_deact=0.100; %[s] falling time constant of gamma(stim) dynamics
+% parms.qmin=1e-10; % minimum possible value for q
+% parms.gamma_min=parms.qmin;
+
+% activation dynamics hatze
+parms.v=3; % 3 according to Hatze/Rockenfeller
+parms.lp=2.9; % 2.9 according to rockenfeller
+% rho_c=[Ca]max * rho0 (ie molar volume); 1.373e-4 * 55700 (for v=3)
+% according to Hatze. But rho0 ranges from 10e-6 to 16e-6 according to
+% Rockenfeller (and some extent Kistemaker 2007). rho_c = 7 according to
+% rockenfeller figure B4 but seems more likely to be 0.7 given the above
+% and the discussion in Rockenfeller appendix C
+parms.rho_c=1.373e-4 * 55700; % 7?? ?? 
+parms.m=11.25; % [fast twitch, 1/3.67 for slow twitch]
 parms.qmin=1e-10; % minimum possible value for q
-parms.gamma_min=parms.qmin;
+%parms.gamma_min=parms.qmin;
 
 % huxley model:
 h = 1e-8;           % attachment 'range' for myosin head [m]
 s = 2.6e-6;         % sarcomere length [m]
 parms.scale_factor = s/(2*h); % [] scaling between x and lcerel
 parms.dx=.05; % [h] stepsize in x
-parms.g1=200; % [Hz] detachment rate parameter
-parms.f1=800; % [Hz] attachment rate parameter
-parms.g2=3000; % [Hz] detachment rate parameter
-parms.g3=1400; % [Hz] detachment rate parameter
+tmp=1.0e+03 * [0.8890    0.4275    3.1703    0.7796];
+parms.g1=tmp(1); % [Hz] detachment rate parameter
+parms.f1=tmp(2); % [Hz] attachment rate parameter
+parms.g2=tmp(3); % [Hz] detachment rate parameter
+parms.g3=tmp(4); % [Hz] detachment rate parameter
 
 % energetics parms scaling: need to fit/optimize these
 parms.c_cb=1; % scale factor between cross bridge uncoupling and metabolic power
@@ -77,7 +91,7 @@ parms.rateFun=@(x)rateFunc_v8(x,parms);
 parms.fse0=0.1*parms.Fmax; % [N]
 
 % set lmtc0, activation follows from this
-lmtc0=(1+parms.se_strain)*parms.lse_slack+1.1*parms.lceopt; % [m]
+lmtc0=(1+parms.se_strain)*parms.lse_slack+.95*parms.lceopt; % [m]
 parms.lmtc0=lmtc0;
 lmtcd0=0; % [m/s]
 
@@ -99,7 +113,8 @@ lcerel0=lce0/parms.lceopt; % []
 parms.q0=(fse0-fpe0)/(parms.Fmax*fisomrel0);
 
 % invert q(gamma) to find gamma0 (fzero has tolX = 1e-16 ...):
-[gamma0,~]=fzero(@activeState_inverse,[parms.qmin 1],[],parms);
+zeroFun=@(x)activeState_inverse_hatze(x,lcerel0,parms);
+[gamma0,~]=fzero(zeroFun,[0 1]);
 parms.gamma0=gamma0;
 
 % now set the domain for x0
@@ -358,7 +373,7 @@ if Animate
         
         plot([0 0],[0 -lce(iSample)],'r','linewidth',2);
         plot([0 0],[-lce(iSample) -lmtc(iSample)],'b','linewidth',2);
-        plot(0,-lmtc(iSample),'ko','linewidth',8); hold off
+        plot([-.015 .015],[-lmtc(iSample) -lmtc(iSample)],'k','linewidth',1.5); hold off
         drawnow
         
         % for video

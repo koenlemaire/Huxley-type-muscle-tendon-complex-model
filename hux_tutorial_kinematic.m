@@ -1,4 +1,4 @@
-function [ dstatedt,varargout ] = hux_tutorial( t,state,parms )
+function [ dstatedt,varargout ] = hux_tutorial_kinematic( t,state,control,parms )
 %function [ dstatedt,out,check,x,n,dndt ] = hux_tutorial( t,state,parms )
 %   INPUT: state [n gamma lce]
 %   OUTPUT: dstatedt: time derivitave of state
@@ -52,33 +52,32 @@ c_act=parms.c_act;
 c_cb=parms.c_cb;
 %% model input
 % stim
-if t<=.2
-    stim=parms.gamma0; % we start in steady state
-elseif t>.2 && t<=1
-    stim=1;
-elseif t>1 && t<5 % full activation
-    stim=.3; 
-else
-    stim=0.1; % relaxation to low value
+freq=parms.freq;
+n_control=length(control);
+period_time=1/freq;
+dt=period_time/n_control;
+controlTimes=dt:dt:period_time;
+n_cycli=parms.n_cycli;
+controlTimes_total=[0 controlTimes];
+controlSig=[.2 control];
+for i=1:(n_cycli-1)
+    controlTimes_total = [controlTimes_total controlTimes+i/freq];
+    controlSig=[controlSig control];
 end
 
+stim=interp1(controlTimes_total,controlSig,t);
+
 % mtc length
-if t>=2 && t<4
-    % 2 Hz sinusoid with eq at lmtc0 and amplitude .1*lmtc0
-    lmtc=(1+.1*sin(4*pi*(t-2)))*parms.lmtc0; 
-    lmtcd=0.4*pi*cos(4*pi*(t-2))*parms.lmtc0;
-else
-    % isometric at lmtc0
-    lmtc=parms.lmtc0;
-    lmtcd=0;
-end
+% isometric at lmtc0
+lmtc=parms.lmtc0;
+lmtcd=0;
 
 %% calculate muscle components lengths
 lcerel=lce./lceopt; % [] relative CE length
 lse = lmtc - lce;  % [m] SE length
 %% calculate gammad and q
-gammad = gammadot(gamma,stim,parms); 
-q = activeState(gamma,parms); % [] relative Ca2+ bound to troponin
+gammad = caldyn_hatze(gamma,stim,parms); 
+q = activeState_hatze(gamma,lcerel,parms); % [] relative Ca2+ bound to troponin
 %% create current bond lengths (x) vector
 dlcerel = (lce - lce0)/lceopt; % [] difference of current lce to lce0 scaled to lcerel
 x = x0 + dlcerel*scale_factor; % [] update x0 to current x 
@@ -91,7 +90,7 @@ nRel = n(iRel);
 % and highest values of the relevant part of x may not exceed the highest
 % and lowest values of the total x vector
 clrX = [xRel(1)-x(1) x(end)-xRel(end)]; % clearance between edges of xRel and x
-if min(clrX) < 1.5 % now we are too close to the edge!
+if min(clrX) < .1 % now we are too close to the edge!
     err=true; 
 else
     err=false;
@@ -121,8 +120,8 @@ if nargout > 1 || err == true
     % NOTE: for all output parameters same notes as in "calucalate lced"
     % section holds!!
     fce = int_nx; % [N]
-    p_act=c_act*gamma; % [W] metabolic power for calcium pumping
-    p_cb=c_cb*sum(gx.*nRel); % [W] metabolic power for CB cycling
+    p_act=gamma/c_act; % [W] metabolic power for calcium pumping
+    p_cb=sum(gx.*nRel)/c_cb; % [W] metabolic power for CB cycling
     
     varargout{1}=[stim q fce fpe fse fisomrel p_cb p_act lmtc lmtcd];
     if nargout>2

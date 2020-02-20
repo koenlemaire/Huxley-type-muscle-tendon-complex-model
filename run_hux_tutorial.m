@@ -15,8 +15,8 @@
 % Journal of Experimental Biology, 219, 977-987. DOI: 10.1242/jeb.128280   
 
 clear
-close all
-clc
+%close all
+%clc
 
 % sort out pathing and stuff
 tmp = mfilename('fullpath');
@@ -27,7 +27,7 @@ addpath(genpath(cd)) % make sure all subfunctions are included
 % simulation processing:
 diagnostics=true; % figures and data for sanity checking results
 normFig=true; % figures for viewing data
-Animate=true; % do simple animation
+Animate=false; % do simple animation
 
 % general:
 parms.mass=1; % [kg]
@@ -52,12 +52,13 @@ parms.gamma_min=parms.qmin;
 % huxley model:
 h = 1e-8;           % attachment 'range' for myosin head [m]
 s = 2.6e-6;         % sarcomere length [m]
-parms.scale_factor = s/(2*h); % [] scaling between x and lcerel
-parms.dx=.05; % [h] stepsize in x
-parms.g1=200; % [Hz] detachment rate parameter
-parms.f1=800; % [Hz] attachment rate parameter
-parms.g2=3000; % [Hz] detachment rate parameter
-parms.g3=1400; % [Hz] detachment rate parameter
+scaletmp=20; % drastically reduces computation time while hardly affecting results, very worthwhile implementing it seems ...
+parms.scale_factor = s/(2*h)/scaletmp; % [] scaling between x and lcerel
+parms.dx=.01; % [h] stepsize in x
+parms.g1=200/scaletmp; % [Hz] detachment rate parameter
+parms.f1=800/scaletmp; % [Hz] attachment rate parameter
+parms.g2=3000/scaletmp; % [Hz] detachment rate parameter
+parms.g3=1400/scaletmp; % [Hz] detachment rate parameter
 
 % energetics parms scaling: need to fit/optimize these
 parms.c_cb=1; % scale factor between cross bridge uncoupling and metabolic power
@@ -116,11 +117,11 @@ parms.gamma0=gamma0;
 % lcerel domain, scaled to the xi domain. Vica versa for the right bound of
 % the xi domain. See bottom script!!
 
-lce_L = 0.2*parms.lceopt; % [m] smallest value lce is expected to attain
-lce_R = 1.8*parms.lceopt; % [m] largest value lce is expected to attain
+lcerel_L = 0.3; % [m] smallest value lce is expected to attain
+lcerel_R = 1.8; % [m] largest value lce is expected to attain
 
-x1 = round((lce0-lce_R)*parms.scale_factor/parms.lceopt); % [h] left bound x
-x2 = round((lce0-lce_L)*parms.scale_factor/parms.lceopt); % [h] right bound x
+x1 = (lcerel0-lcerel_R)*parms.scale_factor-1; % [h] left bound x
+x2 = (lcerel0-lcerel_L)*parms.scale_factor+2; % [h] right bound x
 
 % initial state vector for x, with stepsize dx
 x0 = (x1:parms.dx:x2)';
@@ -155,12 +156,19 @@ parms.k_f=k_f; % [N/h]
 %% run simulation
 state0 = [n0' gamma0 lce0 lmtc0 lmtcd0];
 
+nn=length(n0);
+
+sparsity_pattern=ones(length(state0)); % initialize
+sparsity_pattern(1:nn,1:nn)=diag(ones(nn,1)); % part of n
+
+
 [stated0,y0,check0,xRel0,nRel0,dndtRel0] = hux_tutorial(0,state0,parms);
 t_end=4; % [s] simulation time, starting at t=0 ...
 
 tSpan=[0:.001:t_end]; % chop up time to save memory (reduce state vector)
 ode_fun=@(t,state)hux_tutorial(t,state,parms);
-odeparms=odeset('abstol',1e-8,'reltol',1e-8,'maxstep',.02);
+odeparms=odeset('abstol',1e-6,'reltol',1e-6,'maxstep',.02,'Stats','on');
+%odeparms.JPattern=sparsity_pattern;
 tic
 [t,state] = ode45(ode_fun,tSpan,state0,odeparms);
 toc
@@ -194,8 +202,8 @@ ylim([0 t(end)])
 zlim([0 1])
 % handle output
 stated=stated'; y=y';
-gammad = stated(:,end-1);
-lced = stated(:,end); %[m/s]
+gammad = stated(:,end-3);
+lced = stated(:,end-2); %[m/s]
 
 % unravel y
 Fmax=parms.Fmax;

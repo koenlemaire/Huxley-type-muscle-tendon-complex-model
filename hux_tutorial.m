@@ -74,7 +74,7 @@ nRel = n(iRel);
 % and highest values of the relevant part of x may not exceed the highest
 % and lowest values of the total x vector
 clrX = [xRel(1)-x(1) x(end)-xRel(end)]; % clearance between edges of xRel and x
-if min(clrX) < 1.5 % now we are too close to the edge!
+if min(clrX) < .1 % now we are too close to the edge!
     err=true; 
 else
     err=false;
