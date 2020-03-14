@@ -1,4 +1,4 @@
-function [ dstatedt,varargout ] = hux_tutorial( t,state,parms )
+function [ dstatedt,varargout ] = hux_tutorial_kinematic( t,state,parms )
 %function [ dstatedt,out,check,x,n,dndt ] = hux_tutorial( t,state,parms )
 %   INPUT: state [n gamma lce]
 %   OUTPUT: dstatedt: time derivitave of state
