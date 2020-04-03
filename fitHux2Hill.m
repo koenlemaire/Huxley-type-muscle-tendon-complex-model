@@ -12,7 +12,8 @@ parms.Fmax=1;
 % huxley model:
 h = 1e-8;           % attachment 'range' for myosin head [m]
 s = 2.6e-6;         % sarcomere length [m]
-parms.scale_factor = s/(2*h); % [] scaling between x and lcerel!!
+tmpscale=100;
+parms.scale_factor = s/(2*h)/tmpscale; % [] scaling between x and lcerel!!
 
 parms.Fmax=1;
 parms.width=.56;
@@ -49,8 +50,8 @@ end
 parms.hillData = [vcerel fce];
 parms.hux_vce=linspace(vcerel(2),vcerel(end-1),20)'; % 20 querie points
 parms.hux_vce=parms.hux_vce(parms.hux_vce~=0); % make sure no zeros in here ...
-lb=[10 10 10 10]; % our best guess so far ...
-ub=[5e2 1e3 1e4 1e3]; % f1 g1 g2 g3 
+lb=[10 10 10 10]/tmpscale; % our best guess so far ...
+ub=[5e2 1e3 1e4 1e3]/tmpscale; % f1 g1 g2 g3 
 
 x_init=(lb+ub)/2; % just in the middle of our space ...
 parms.x_init=x_init;
@@ -268,6 +269,7 @@ function [ error ] = calculateHuxleyError( huxleyParms,parms )
 
 %read out parameters
 huxleyParms=abs(scale_x(huxleyParms,'rel_to_abs',parms));
+scaletmp=10;
 parms.f1 = huxleyParms(1);
 parms.g1 = huxleyParms(2);
 parms.g2 = huxleyParms(3);
@@ -278,8 +280,8 @@ eval(['rateFun=@(x)',parms.rateFunName,'(x,parms);'])
 parms.rateFun=rateFun;
 
 % domain for x of the initial curve
-x1 =  -.2; %[bond length au]
-x2 =  1.2; %[bond length au]
+x1 =  -2; %[bond length au]
+x2 =  3; %[bond length au]
 
 % stepsize for initial x, default is 1000 steps
 dx = 1/1000;
@@ -302,6 +304,9 @@ huxData=[hux_vce Fhux];
 error = sum(D.^2);
 
 if parms.dispFig==true
+    figure(98)
+    plot(x,[fx gx])
+    figure(99)
     plot(hillData(:,1),hillData(:,2),'k',huxData(:,1),huxData(:,2),'ko',hillData(idx,1),hillData(idx,2),'ro')
     drawnow
     keyboard
