@@ -27,7 +27,7 @@ addpath(genpath(cd)) % make sure all subfunctions are included
 % simulation processing:
 diagnostics=true; % figures and data for sanity checking results
 normFig=true; % figures for viewing data
-Animate=false; % do simple animation
+Animate=true; % do simple animation
 
 % general:
 parms.mass=1; % [kg]
