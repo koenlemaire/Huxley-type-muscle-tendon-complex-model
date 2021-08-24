@@ -95,7 +95,7 @@ lmtc0=(1+parms.se_strain)*parms.lse_slack+.95*parms.lceopt; % [m]
 parms.lmtc0=lmtc0;
 lmtcd0=0; % [m/s]
 
-[lse0]=fzero(@Fse_inverse,parms.lse_slack*[1 (1+parms.se_strain)],[],parms); % [m]
+[lse0]=fzero(@Fse_inverse2,parms.lse_slack*[1 (1+parms.se_strain)],[],parms); % [m]
 
 % compute lce0
 lce0 = lmtc0-lse0; % [m]
@@ -131,8 +131,8 @@ parms.gamma0=gamma0;
 % lcerel domain, scaled to the xi domain. Vica versa for the right bound of
 % the xi domain. See bottom script!!
 
-lce_L = 0.2*parms.lceopt; % [m] smallest value lce is expected to attain
-lce_R = 1.8*parms.lceopt; % [m] largest value lce is expected to attain
+lce_L = 0.4*parms.lceopt; % [m] smallest value lce is expected to attain
+lce_R = 1.6*parms.lceopt; % [m] largest value lce is expected to attain
 
 x1 = round((lce0-lce_R)*parms.scale_factor/parms.lceopt); % [h] left bound x
 x2 = round((lce0-lce_L)*parms.scale_factor/parms.lceopt); % [h] right bound x
@@ -170,12 +170,13 @@ parms.k_f=k_f; % [N/h]
 %% run simulation
 state0 = [n0' gamma0 lce0];
 
-[stated0,y0,check0,xRel0,nRel0,dndtRel0] = hux_tutorial_kinematic(0,state0,parms);
+[stated0,y0,check0,xRel0,nRel0,dndtRel0] = hux_tutorial_kinematic_quasi_hatze(0,state0,parms);
 t_end=6; % [s] simulation time, starting at t=0 ...
 
 tSpan=[0:.001:t_end]; % chop up time to save memory (reduce state vector)
-ode_fun=@(t,state)hux_tutorial_kinematic(t,state,parms);
-odeparms=odeset('abstol',1e-8,'reltol',1e-8,'maxstep',.02);
+ode_fun=@(t,state)hux_tutorial_kinematic_quasi_hatze(t,state,parms);
+odeparms=odeset('abstol',1e-8,'reltol',1e-8,'maxstep',.02,'Stats','on');
+
 tic
 [t,state] = ode45(ode_fun,tSpan,state0,odeparms);
 toc
@@ -198,7 +199,7 @@ if diagnostics == true
 end
 
 for i=1:length(t)
-    [stated(:,i),y(:,i),check(:,i),x,n,dndt] = hux_tutorial_kinematic(t(i),state(i,:)',parms);
+    [stated(:,i),y(:,i),check(:,i),x,n,dndt] = hux_tutorial_kinematic_quasi_hatze(t(i),state(i,:)',parms);
     if diagnostics==true && mod(i-1,5)==0 % every 5 samples
         plot3(x,ones(size(x))*t(i),n);hold on
         xlabel x; ylabel t; zlabel n

@@ -14,9 +14,26 @@
 % models using experimental data obtained from rat m. Soleus in situ.
 % Journal of Experimental Biology, 219, 977-987. DOI: 10.1242/jeb.128280   
 
+
+% PROBLEM:
+% numerical instability (fast oscilations) because around x=1 ndot is
+% sometimes nonzero. EVEN when starting in complete equilibrium with
+% constant input?!?! 
+
+% things tried (result):
+% -different formulation ratefuncs; sinusoid transition and classical, ie
+% step transition (didn't change anything)
+% -10 x more fine-grained discretization of x (didn't change anything)
+
+% things to try:
+% -stiff integrator
+% -Heun integrator
+% -some sort of rounding of ndot?! Seems dubious
+
+% -
 clear
-%close all
-%clc
+close all
+clc
 
 % sort out pathing and stuff
 tmp = mfilename('fullpath');
@@ -24,48 +41,8 @@ tmp = tmp(1:length(tmp)-length(mfilename));
 cd(tmp)
 addpath(genpath(cd)) % make sure all subfunctions are included
 %% set parameters
-% simulation processing:
-diagnostics=true; % figures and data for sanity checking results
-normFig=true; % figures for viewing data
-Animate=false; % do simple animation
+tutorial_parms
 
-% general:
-parms.mass=1; % [kg]
-parms.Fmax=2*parms.mass*9.81; %[N]
-parms.lceopt=0.07; % [m] CE optimum length
-parms.lpe_slack=1.1*parms.lceopt; % [m] PE slack length
-parms.lse_slack=0.13; % [m] SE slack length
-parms.se_strain=.05; % [N/m^2] SE shape, Fse=Fmax at 4% strain
-parms.pe_strain=.2; % [N/m^2] PE shape, Fpe=0.5*Fmax at 4% strain????
-width=0.56; % [] width of force length relation
-parms.width=width;
-parms.C=-(1/width)^4;
-
-% activation dynamics:     %% DONT MATTER FOR INITIAL SS CONDITION
-parms.k=.35; % 50% point in q-gamma relation
-parms.n=2; % curvature in q-gamma relation
-parms.tau_act=0.080; %[s] rising time constant of gamma(stim) dynamics
-parms.tau_deact=0.100; %[s] falling time constant of gamma(stim) dynamics
-parms.qmin=1e-10; % minimum possible value for q
-parms.gamma_min=parms.qmin;
-
-% huxley model:
-h = 1e-8;           % attachment 'range' for myosin head [m]
-s = 2.6e-6;         % sarcomere length [m]
-scaletmp=20; % drastically reduces computation time while hardly affecting results, very worthwhile implementing it seems ...
-parms.scale_factor = s/(2*h)/scaletmp; % [] scaling between x and lcerel
-parms.dx=.01; % [h] stepsize in x
-parms.g1=200/scaletmp; % [Hz] detachment rate parameter
-parms.f1=800/scaletmp; % [Hz] attachment rate parameter
-parms.g2=3000/scaletmp; % [Hz] detachment rate parameter
-parms.g3=1400/scaletmp; % [Hz] detachment rate parameter
-
-% energetics parms scaling: need to fit/optimize these
-parms.c_cb=1; % scale factor between cross bridge uncoupling and metabolic power
-parms.c_act=1; % scale factor between free calcium and metabolic power 
-
-% rate function form; see different supplied functions
-parms.rateFun=@(x)rateFunc_v8(x,parms);
 %% Initial conditions
 
 % -calculate (or set, in this case) lmtc0, fse0 and lse0
@@ -79,10 +56,13 @@ parms.rateFun=@(x)rateFunc_v8(x,parms);
 parms.fse0=0.5*parms.Fmax; % [N]
 
 % set lmtc0, activation follows from this
-lmtc0=(1+parms.se_strain)*parms.lse_slack+1.1*parms.lceopt; % [m]
+lmtc0=(1+se_strain)*parms.lse_slack+1.05*parms.lceopt; % [m]
 lmtcd0=0; % [m/s]
 
-[lse0]=fzero(@Fse_inverse,parms.lse_slack*[1 (1+parms.se_strain)],[],parms); % [m]
+opts=optimset('fzero');
+opts.TolX=1e-16;
+
+[lse0]=fzero(@Fse_inverse,parms.lse_slack*[1 (1+se_strain)],opts,parms); % [m]
 
 % compute lce0
 lce0 = lmtc0-lse0; % [m]
@@ -96,7 +76,7 @@ lcerel0=lce0/parms.lceopt; % []
 % freely
 % calculate q0:
 %parms.q0=activeState(gamma0,parms);
-[fse0, fpe0, ~, ~] = CEEC_simple2(lse0,lce0,parms);
+[fse0, fpe0, ~, ~] = CEEC_simple(lse0,lce0,parms);
 parms.q0=(fse0-fpe0)/(parms.Fmax*fisomrel0);
 
 % invert q(gamma) to find gamma0 (fzero has tolX = 1e-16 ...):
@@ -117,8 +97,8 @@ parms.gamma0=gamma0;
 % lcerel domain, scaled to the xi domain. Vica versa for the right bound of
 % the xi domain. See bottom script!!
 
-lcerel_L = 0.3; % [m] smallest value lce is expected to attain
-lcerel_R = 1.8; % [m] largest value lce is expected to attain
+lcerel_L = 0.4; % [m] smallest value lce is expected to attain
+lcerel_R = 1.6; % [m] largest value lce is expected to attain
 
 x1 = (lcerel0-lcerel_R)*parms.scale_factor-1; % [h] left bound x
 x2 = (lcerel0-lcerel_L)*parms.scale_factor+2; % [h] right bound x
@@ -145,41 +125,51 @@ xlabel('x [h]')
 ylabel('rate [Hz]')
 xlim([-2 2])
 legend('attachment','detachment')
-figure;plot(x0,nSS); axis([-2 2 0 1])
+figure;plot(x0,nSS); axis([-5 5 0 1])
 title('steady state isometric n(x)')
 xlabel('x [h]')
 ylabel('n []')
 
 % Scaling factor for the moments of n(x,t) to force
-k_f=parms.Fmax/(sum(x0.*nSS));
+k_f=parms.Fmax/(trapz(x0.*nSS));
 parms.k_f=k_f; % [N/h]
+
+%% test calc_lce function
+global CURRENT_LCE
+CURRENT_LCE = lce0;
+
+[lcetmp]=calc_lce_strict(n0,lmtc0,parms);
 %% run simulation
-state0 = [n0' gamma0 lce0 lmtc0 lmtcd0];
+state0 = [n0(:); gamma0; lmtc0; lmtcd0];
+% stiff version does not work well here, no analytic Jacobian as of yet
+% ... 1
+sim_opt='normal'; % stiff or normal
 
-nn=length(n0);
+[stated0,y0,check0,xRel0,nRel0,dndtRel0] = hux_tutorial_dynamic_strict(0,state0,parms);
+t_end=1; % [s] simulation time, starting at t=0 ...
 
-sparsity_pattern=ones(length(state0)); % initialize
-sparsity_pattern(1:nn,1:nn)=diag(ones(nn,1)); % part of n
-
-
-[stated0,y0,check0,xRel0,nRel0,dndtRel0] = hux_tutorial(0,state0,parms);
-t_end=4; % [s] simulation time, starting at t=0 ...
-
+%tSpan=[0 t_end]; % chop up time to save memory (reduce state vector)
 tSpan=[0:.001:t_end]; % chop up time to save memory (reduce state vector)
-ode_fun=@(t,state)hux_tutorial(t,state,parms);
-odeparms=odeset('abstol',1e-6,'reltol',1e-6,'maxstep',.02,'Stats','on');
+ode_fun=@(t,state)hux_tutorial_dynamic_strict(t,state,parms);
+odeparms=odeset('abstol',1e-5,'reltol',1e-5,'maxstep',.02,'Stats','on');
 %odeparms.JPattern=sparsity_pattern;
 tic
-[t,state] = ode45(ode_fun,tSpan,state0,odeparms);
+switch sim_opt
+    case 'normal'
+        [t,state] = ode45(ode_fun,tSpan,state0,odeparms);
+    case 'stiff'
+        sparsity_pattern=diag(ones(1,length(state0))); % pd of ndot wrt n and gammad wrt gamma
+        sparsity_pattern(end,:)=1; % pd of ndot wrt gamma
+        odeparms.JPattern=sparsity_pattern;
+        [t,state] = ode23s(ode_fun,tSpan,state0,odeparms);
+end
 toc
 
 % unravel state
-n = state(:,1:end-4);
-gamma = state(:,end-3);
-lce= state(:,end-2); % [m]
+%n = state(:,1:end-4);
+gamma = state(:,end-2);
 lmtc= state(:,end-1); % [m]
 lmtcd= state(:,end); % [m]
-lse=lmtc-lce; % [m]
 
 % initialise stated and optional output
 check = zeros(length(check0),length(t));
@@ -191,19 +181,27 @@ if diagnostics == true
 end
 
 for i=1:length(t)
-    [stated(:,i),y(:,i),check(:,i),x,n,dndt] = hux_tutorial(t(i),state(i,:)',parms);
-    if diagnostics==true && mod(i-1,5)==0 % every 5 samples
+    [stated(:,i),y(:,i),check(:,i),x,n,dndt] = hux_tutorial_dynamic_strict(t(i),state(i,:)',parms);
+    if diagnostics==true %&& mod(i-1,5)==0 % every 5 samples
+        subplot(121)
         plot3(x,ones(size(x))*t(i),n);hold on
         xlabel x; ylabel t; zlabel n
+        subplot(122)
+        plot3(x,ones(size(x))*t(i),dndt./n);hold on
+        xlabel x; ylabel t; zlabel('local eigenvalue')
     end
 end
-xlim([-3 3])
+subplot(121)
+xlim([-5 5])
 ylim([0 t(end)])
 zlim([0 1])
-% handle output
+subplot(122)
+xlim([-5 5])
+ylim([0 t(end)])
+
+%handle output
 stated=stated'; y=y';
-gammad = stated(:,end-3);
-lced = stated(:,end-2); %[m/s]
+gammad = stated(:,end-2);
 
 % unravel y
 Fmax=parms.Fmax;
@@ -215,10 +213,14 @@ fse=y(:,5); %[N]
 fisomrel=y(:,6); %[]
 p_cb=y(:,7); %[W]
 p_act=y(:,8); %[W]
+lce=y(:,9); %[W]
+lced=central_diff(lce,1/diff(t(1:2)));
+lse=lmtc-lce; % [m]
+
 fcerel = fce/parms.Fmax;
 fperel = fpe/parms.Fmax;
 fserel = fse/parms.Fmax;
-clear y
+%clear y
 lcerel = lce/parms.lceopt;
 lserel = lse/parms.lse_slack;
 lmtcrel=lmtc/(parms.lceopt+(1+.05)*parms.lse_slack);
@@ -235,40 +237,21 @@ W_grav = -parms.mass*(lmtc-lmtc(1))*-9.81; %[J]
 %% diagnostics
 if diagnostics == true
     % error and other checks
-    check=check';
-    dforceErrordt = -check(:,1)-check(:,2)+check(:,3);
-    forceError = fse-fpe-fce;
-    lengthError = lmtc - lse - lce;
-    clear check
+    %check=check';
     figure
-    subplot(221)
-    plot (t,forceError)
-    title(['force error'])
-    xlabel ('time [s]')
-    ylabel ('F_c_e + F_p_e - F_s_e [N]')
-    subplot(222)
-    plot (t,dforceErrordt)
-    title('derivative of force error')
-    xlabel ('time [s]')
-    ylabel ('dF_c_e/dt + dF_p_e/dt - dF_s_e/dt [N/s]')
-    subplot(223)
     plot (t,[ce_work+se_work+pe_work-lmtc_work Ekin-W_grav-lmtc_work])
     title('energy errors')
     xlabel ('time [s]')
     ylabel ('energy [J]')
     legend('w_c_e + w_p_e + w_s_e - w_m_t_c','Ekin - w_m_t_c - w_F_z')
-    subplot(224)
-    plot (t,lengthError)
-    title('length error')
-    xlabel ('time [s]')
-    ylabel ('l_mt_c - l_c_e - l_s_e [m]')
 end
 
 %% standard output figs
 if normFig==true
     figure
     subplot(221)
-    plot(t,[stim gamma q])
+    plot(t,[stim gamma q]); hold on
+    plot(t,gamma,'.')
     axis([0 t(end) 0 1])
     legend('STIM','gamma','q')
     title('Stimulation') %'stimulation as set in this protocol')

@@ -1,4 +1,4 @@
-function [ dstatedt,varargout ] = hux_tutorial( t,state,parms )
+function [ dstatedt,varargout ] = hux_tutorial_kinematic_strict( t,state,parms )
 %function [ dstatedt,out,check,x,n,dndt ] = hux_tutorial( t,state,parms )
 %   INPUT: state [n gamma lce]
 %   OUTPUT: dstatedt: time derivitave of state
@@ -34,11 +34,12 @@ function [ dstatedt,varargout ] = hux_tutorial( t,state,parms )
 
 %% unravel state vector
 state=state(:);
-n = state(1:end-4); % [] fraction of bound cross bridges
-gamma = state(end-3); % [] relative free Ca2+ concentration
-lce = state(end-2); % [m] contractile element length
-lmtc=state(end-1); % [m] muscle tendon complex length
-lmtcd=state(end); % [m/s] time derivative 
+n = state(1:end-1); % [] fraction of bound cross bridges
+gamma = state(end); % [] relative free Ca2+ concentration
+
+% this is now an input!
+%lmtc=state(end-1); % [m] muscle tendon complex length
+%lmtcd=state(end); % [m/s] time derivative 
 %% read out parameters
 scale_factor = parms.scale_factor; % [] scale factor between lcerel and x
 x0 = parms.x0; % initial vector x0 at t=0
@@ -49,16 +50,15 @@ rateFun=parms.rateFun; % fx/gx rate function
 c_act=parms.c_act;
 c_cb=parms.c_cb;
 %% model input
-if t<=.5
-    stim=parms.gamma0; % we start in steady state
-elseif t>.5 && t<2 % full activation
-    stim=1; 
-else
-    stim=0.2; % relaxation to low value
-end
-%% calculate muscle components lengths
+[stim,lmtc,lmtcd]=kinematic_model_input(t,parms);
+
+%% calculate lce given current state
+% the idea is to solve Fse-Fce-Fpe=0 for lce. This should be possible
+% because all terms are linear or quadratic in lce, so ABC formula should
+% do the trick ...  
+
+[lce,Fse,Fce,Fpe]=calc_lce_strict(n,lmtc,parms);
 lcerel=lce./lceopt; % [] relative CE length
-lse = lmtc - lce;  % [m] SE length
 %% calculate gammad and q
 gammad = gammadot(gamma,stim,parms); 
 q = activeState(gamma,parms); % [] relative Ca2+ bound to troponin
@@ -66,7 +66,7 @@ q = activeState(gamma,parms); % [] relative Ca2+ bound to troponin
 dlcerel = (lce - lce0)/lceopt; % [] difference of current lce to lce0 scaled to lcerel
 x = x0 + dlcerel*scale_factor; % [] update x0 to current x 
 %% select relevant part of x/n vector
-iRel = (x<2 & x>-1) | abs(n)>1e-16; % these are the values where dndt~=0 AND/OR n~=0
+iRel = (x<2 & x>-1) | abs(n)>0; % these are the values where dndt~=0 AND/OR n~=0
 xRel = x(iRel); % define xRel and nRel
 nRel = n(iRel);
 %% check sparsity assumption
@@ -81,49 +81,26 @@ else
 end
 %% calculate fisomrel
 [fisomrel] = ce_fl_simple(lcerel,parms); % [] relative isometric CE force
-%% calculate SE and PE force and instantanious stiffness
-[fse, fpe, kse, kpe] = CEEC_simple2(lse,lce,parms); % [N N N/m N/m]
 %% calculate f(x), g(x) and dndt
 [fx,gx]=rateFun(xRel(:)); % see function for details
 dndtRel=fisomrel*q*fx-(fx+gx).*nRel; % see Lemaire et al. 2016 for details, now incorporates both q and fisom
 dndt(iRel)=dndtRel; % update dndt with new (nonzero) values
-%% calculate lced
-% help variables:
-kf=parms.k_f; % [N/h] scaling between distribution and force 
-int_nx  = sum(xRel.*nRel)*kf; % CE force [N]
-int_n   = sum(nRel)*kf; % CE stifness [N/h]
-int_dnx = sum(xRel.*dndtRel)*kf; % [N/s]
-
-% now calculate lced (see Lemaire et al. 2016 for details)
-lced = (-int_dnx + lmtcd*kse) ./ (int_n*scale_factor/lceopt + kse + kpe); % [m/s]
-
-%% calculate lmtcdd
-Fz=-9.81*parms.mass; % [N] gravitational force
-lmtcdd=-(fse+Fz)/parms.mass; % [m/s^2] Newtons law, minus sign because moving up means muscle shortening
 
 %% complete stated
-dstatedt = [dndt; gammad; lced; lmtcd; lmtcdd];
+dstatedt = [dndt; gammad];
 %% calculate optional output parameters and error handling
 if nargout > 1 || err == true
     % NOTE: for all output parameters same notes as in "calucalate lced"
     % section holds!!
-    fce = int_nx; % [N]
-    p_act=c_act*gamma; % [W] metabolic power for calcium pumping
-    p_cb=c_cb*sum(gx.*nRel); % [W] metabolic power for CB cycling
-    
-    varargout{1}=[stim q fce fpe fse fisomrel p_cb p_act];
+    p_act=c_act*gamma;
+    p_cb=c_cb*trapz(gx.*nRel);
+    varargout{1}=[stim q Fce Fpe Fse fisomrel p_cb p_act lce lmtc lmtcd];
     if nargout>2
-        dfcedt = int_dnx + scale_factor*int_n*lced/lceopt; % [N/s]
-        dfsedt = kse*(lmtcd-lced); % [N/s]
-        dfpedt = kpe*lced; % [N/s]
-        varargout{2}=[dfcedt dfpedt dfsedt];% clrX(1) clrX(end)];
+        varargout{2}=xRel;        
         if nargout>3
-            varargout{3}=xRel;
+            varargout{3}=nRel;            
             if nargout>4
-                varargout{4}=nRel;
-                if nargout>5
-                    varargout{5}=dndtRel;
-                end
+                varargout{4}=dndtRel;                
             end
         end
     end

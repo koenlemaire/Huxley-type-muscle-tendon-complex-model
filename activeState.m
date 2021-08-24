@@ -1,4 +1,4 @@
-function [ q ] = activeState( gamma,com )
+function [ q ] = activeState( gamma,parms )
 %function [ q ] = activeState( gamma,parms )
 %   input: free calcium concentration gamma and parms
 %   output: active state q
@@ -13,10 +13,10 @@ function [ q ] = activeState( gamma,com )
 % mannard (1973)
 % Rack & westbury (1969)
 % stephenson (1984)
-n=com.n; %=2 CAREFULL!!
-k=com.k; %=.35
+n=parms.n; %=2 CAREFULL!!
+k=parms.k; %=.35
 q = (1+k.^n).*(gamma.^n)./(gamma.^n + k.^n);
-qmin=com.qmin;
+qmin=parms.qmin;
 q(q<qmin)=qmin;
 return
 

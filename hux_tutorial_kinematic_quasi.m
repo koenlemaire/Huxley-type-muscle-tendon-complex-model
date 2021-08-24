@@ -1,4 +1,4 @@
-function [ dstatedt,varargout ] = hux_tutorial_kinematic( t,state,control,parms )
+function [ dstatedt,varargout ] = hux_tutorial_kinematic_quasi( t,state,parms )
 %function [ dstatedt,out,check,x,n,dndt ] = hux_tutorial( t,state,parms )
 %   INPUT: state [n gamma lce]
 %   OUTPUT: dstatedt: time derivitave of state
@@ -51,33 +51,14 @@ rateFun=parms.rateFun; % fx/gx rate function
 c_act=parms.c_act;
 c_cb=parms.c_cb;
 %% model input
-% stim
-freq=parms.freq;
-n_control=length(control);
-period_time=1/freq;
-dt=period_time/n_control;
-controlTimes=dt:dt:period_time;
-n_cycli=parms.n_cycli;
-controlTimes_total=[0 controlTimes];
-controlSig=[.2 control];
-for i=1:(n_cycli-1)
-    controlTimes_total = [controlTimes_total controlTimes+i/freq];
-    controlSig=[controlSig control];
-end
-
-stim=interp1(controlTimes_total,controlSig,t);
-
-% mtc length
-% isometric at lmtc0
-lmtc=parms.lmtc0;
-lmtcd=0;
+[stim,lmtc,lmtcd]=kinematic_model_input(t,parms);
 
 %% calculate muscle components lengths
 lcerel=lce./lceopt; % [] relative CE length
 lse = lmtc - lce;  % [m] SE length
 %% calculate gammad and q
-gammad = caldyn_hatze(gamma,stim,parms); 
-q = activeState_hatze(gamma,lcerel,parms); % [] relative Ca2+ bound to troponin
+gammad = gammadot(gamma,stim,parms); 
+q = activeState(gamma,parms); % [] relative Ca2+ bound to troponin
 %% create current bond lengths (x) vector
 dlcerel = (lce - lce0)/lceopt; % [] difference of current lce to lce0 scaled to lcerel
 x = x0 + dlcerel*scale_factor; % [] update x0 to current x 
@@ -98,7 +79,7 @@ end
 %% calculate fisomrel
 [fisomrel] = ce_fl_simple(lcerel,parms); % [] relative isometric CE force
 %% calculate SE and PE force and instantanious stiffness
-[fse, fpe, kse, kpe] = CEEC_simple2(lse,lce,parms); % [N N N/m N/m]
+[fse, fpe, kse, kpe] = CEEC_simple(lse,lce,parms); % [N N N/m N/m]
 %% calculate f(x), g(x) and dndt
 [fx,gx]=rateFun(xRel(:)); % see function for details
 dndtRel=fisomrel*q*fx-(fx+gx).*nRel; % see Lemaire et al. 2016 for details, now incorporates both q and fisom
