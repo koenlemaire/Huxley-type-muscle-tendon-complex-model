@@ -145,7 +145,7 @@ state0 = [n0(:); gamma0; lmtc0; lmtcd0];
 % ... 1
 sim_opt='normal'; % stiff or normal
 
-[stated0,y0,check0,xRel0,nRel0,dndtRel0] = hux_tutorial_dynamic_strict(0,state0,parms);
+[stated0,y0,xRel0,nRel0,dndtRel0] = hux_tutorial_dynamic_strict(0,state0,parms);
 t_end=1; % [s] simulation time, starting at t=0 ...
 
 %tSpan=[0 t_end]; % chop up time to save memory (reduce state vector)
@@ -181,7 +181,7 @@ if diagnostics == true
 end
 
 for i=1:length(t)
-    [stated(:,i),y(:,i),check(:,i),x,n,dndt] = hux_tutorial_dynamic_strict(t(i),state(i,:)',parms);
+    [stated(:,i),y(:,i),x,n,dndt] = hux_tutorial_dynamic_strict(t(i),state(i,:)',parms);
     if diagnostics==true %&& mod(i-1,5)==0 % every 5 samples
         subplot(121)
         plot3(x,ones(size(x))*t(i),n);hold on

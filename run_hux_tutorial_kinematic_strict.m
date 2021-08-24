@@ -125,7 +125,7 @@ CURRENT_LCE = lce0;
 %% run simulation
 state0 = [n0(:); gamma0];
 
-sim_opt='stiff'; % stiff or normal
+sim_opt='normal'; % stiff or normal
 
 [stated0,y0,xRel0,nRel0,dndtRel0] = hux_tutorial_kinematic_strict(0,state0,parms);
 

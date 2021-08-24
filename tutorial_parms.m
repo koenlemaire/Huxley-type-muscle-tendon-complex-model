@@ -48,5 +48,5 @@ parms.c_act=1; % scale factor between free calcium and metabolic power
 parms.rateFun=@(x)rateFunc_v8(x,parms);
 
 % simulation time
-t_end=.15; % [s] simulation time, starting at t=0 ...
+t_end=1; % [s] simulation time, starting at t=0 ...
 
