@@ -15,8 +15,8 @@
 % Journal of Experimental Biology, 219, 977-987. DOI: 10.1242/jeb.128280   
 
 clear
-%close all
-%clc
+close all
+clc
 
 % sort out pathing and stuff
 tmp = mfilename('fullpath');
@@ -30,8 +30,7 @@ normFig=true; % figures for viewing data
 Animate=true; % do simple animation
 
 % general:
-parms.mass=1; % [kg]
-parms.Fmax=2*parms.mass*9.81; %[N]
+parms.Fmax=1; %[N]
 parms.lceopt=0.07; % [m] CE optimum length
 parms.lpe_slack=1.1*parms.lceopt; % [m] PE slack length
 parms.lse_slack=0.13; % [m] SE slack length
@@ -41,24 +40,37 @@ width=0.56; % [] width of force length relation
 parms.width=width;
 parms.C=-(1/width)^4;
 
-% activation dynamics:     %% DONT MATTER FOR INITIAL SS CONDITION
-parms.k=.35; % 50% point in q-gamma relation
-parms.n=2; % curvature in q-gamma relation
-parms.tau_act=0.080; %[s] rising time constant of gamma(stim) dynamics
-parms.tau_deact=0.100; %[s] falling time constant of gamma(stim) dynamics
+% activation dynamics curtin:     %% DONT MATTER FOR INITIAL SS CONDITION
+% parms.k=.35; % 50% point in q-gamma relation
+% parms.n=2; % curvature in q-gamma relation
+% parms.tau_act=0.080; %[s] rising time constant of gamma(stim) dynamics
+% parms.tau_deact=0.100; %[s] falling time constant of gamma(stim) dynamics
+% parms.qmin=1e-10; % minimum possible value for q
+% parms.gamma_min=parms.qmin;
+
+% activation dynamics hatze
+parms.v=3; % 3 according to Hatze/Rockenfeller
+parms.lp=2.9; % 2.9 according to rockenfeller
+% rho_c=[Ca]max * rho0 (ie molar volume); 1.373e-4 * 55700 (for v=3)
+% according to Hatze. But rho0 ranges from 10e-6 to 16e-6 according to
+% Rockenfeller (and some extent Kistemaker 2007). rho_c = 7 according to
+% rockenfeller figure B4 but seems more likely to be 0.7 given the above
+% and the discussion in Rockenfeller appendix C
+parms.rho_c=1.373e-4 * 55700; % 7?? ?? 
+parms.m=11.25; % [fast twitch, 1/3.67 for slow twitch]
 parms.qmin=1e-10; % minimum possible value for q
-parms.gamma_min=parms.qmin;
+%parms.gamma_min=parms.qmin;
 
 % huxley model:
 h = 1e-8;           % attachment 'range' for myosin head [m]
 s = 2.6e-6;         % sarcomere length [m]
-scaletmp=20; % drastically reduces computation time while hardly affecting results, very worthwhile implementing it seems ...
-parms.scale_factor = s/(2*h)/scaletmp; % [] scaling between x and lcerel
-parms.dx=.01; % [h] stepsize in x
-parms.g1=200/scaletmp; % [Hz] detachment rate parameter
-parms.f1=800/scaletmp; % [Hz] attachment rate parameter
-parms.g2=3000/scaletmp; % [Hz] detachment rate parameter
-parms.g3=1400/scaletmp; % [Hz] detachment rate parameter
+parms.scale_factor = s/(2*h); % [] scaling between x and lcerel
+parms.dx=.05; % [h] stepsize in x
+tmp=1.0e+03 * [0.8890    0.4275    3.1703    0.7796];
+parms.g1=tmp(1); % [Hz] detachment rate parameter
+parms.f1=tmp(2); % [Hz] attachment rate parameter
+parms.g2=tmp(3); % [Hz] detachment rate parameter
+parms.g3=tmp(4); % [Hz] detachment rate parameter
 
 % energetics parms scaling: need to fit/optimize these
 parms.c_cb=1; % scale factor between cross bridge uncoupling and metabolic power
@@ -76,13 +88,14 @@ parms.rateFun=@(x)rateFunc_v8(x,parms);
 % n0 = nSS*fisom0*q0
 
 % set Fse0 :
-parms.fse0=0.5*parms.Fmax; % [N]
+parms.fse0=0.1*parms.Fmax; % [N]
 
 % set lmtc0, activation follows from this
-lmtc0=(1+parms.se_strain)*parms.lse_slack+1.1*parms.lceopt; % [m]
+lmtc0=(1+parms.se_strain)*parms.lse_slack+.95*parms.lceopt; % [m]
+parms.lmtc0=lmtc0;
 lmtcd0=0; % [m/s]
 
-[lse0]=fzero(@Fse_inverse,parms.lse_slack*[1 (1+parms.se_strain)],[],parms); % [m]
+[lse0]=fzero(@Fse_inverse2,parms.lse_slack*[1 (1+parms.se_strain)],[],parms); % [m]
 
 % compute lce0
 lce0 = lmtc0-lse0; % [m]
@@ -100,7 +113,8 @@ lcerel0=lce0/parms.lceopt; % []
 parms.q0=(fse0-fpe0)/(parms.Fmax*fisomrel0);
 
 % invert q(gamma) to find gamma0 (fzero has tolX = 1e-16 ...):
-[gamma0,~]=fzero(@activeState_inverse,[parms.qmin 1],[],parms);
+zeroFun=@(x)activeState_inverse_hatze(x,lcerel0,parms);
+[gamma0,~]=fzero(zeroFun,[0 1]);
 parms.gamma0=gamma0;
 
 % now set the domain for x0
@@ -117,11 +131,11 @@ parms.gamma0=gamma0;
 % lcerel domain, scaled to the xi domain. Vica versa for the right bound of
 % the xi domain. See bottom script!!
 
-lcerel_L = 0.3; % [m] smallest value lce is expected to attain
-lcerel_R = 1.8; % [m] largest value lce is expected to attain
+lce_L = 0.4*parms.lceopt; % [m] smallest value lce is expected to attain
+lce_R = 1.6*parms.lceopt; % [m] largest value lce is expected to attain
 
-x1 = (lcerel0-lcerel_R)*parms.scale_factor-1; % [h] left bound x
-x2 = (lcerel0-lcerel_L)*parms.scale_factor+2; % [h] right bound x
+x1 = round((lce0-lce_R)*parms.scale_factor/parms.lceopt); % [h] left bound x
+x2 = round((lce0-lce_L)*parms.scale_factor/parms.lceopt); % [h] right bound x
 
 % initial state vector for x, with stepsize dx
 x0 = (x1:parms.dx:x2)';
@@ -154,32 +168,26 @@ ylabel('n []')
 k_f=parms.Fmax/(sum(x0.*nSS));
 parms.k_f=k_f; % [N/h]
 %% run simulation
-state0 = [n0' gamma0 lce0 lmtc0 lmtcd0];
+state0 = [n0' gamma0 lce0];
 
-nn=length(n0);
-
-sparsity_pattern=ones(length(state0)); % initialize
-sparsity_pattern(1:nn,1:nn)=diag(ones(nn,1)); % part of n
-
-
-[stated0,y0,check0,xRel0,nRel0,dndtRel0] = hux_tutorial(0,state0,parms);
-t_end=4; % [s] simulation time, starting at t=0 ...
+[stated0,y0,check0,xRel0,nRel0,dndtRel0] = hux_tutorial_kinematic_quasi_hatze(0,state0,parms);
+t_end=6; % [s] simulation time, starting at t=0 ...
 
 tSpan=[0:.001:t_end]; % chop up time to save memory (reduce state vector)
-ode_fun=@(t,state)hux_tutorial(t,state,parms);
-odeparms=odeset('abstol',1e-6,'reltol',1e-6,'maxstep',.02,'Stats','on');
-%odeparms.JPattern=sparsity_pattern;
+ode_fun=@(t,state)hux_tutorial_kinematic_quasi_hatze(t,state,parms);
+odeparms=odeset('abstol',1e-8,'reltol',1e-8,'maxstep',.02,'Stats','on');
+
 tic
 [t,state] = ode45(ode_fun,tSpan,state0,odeparms);
 toc
 
 % unravel state
-n = state(:,1:end-4);
-gamma = state(:,end-3);
-lce= state(:,end-2); % [m]
-lmtc= state(:,end-1); % [m]
-lmtcd= state(:,end); % [m]
-lse=lmtc-lce; % [m]
+n = state(:,1:end-2);
+gamma = state(:,end-1);
+lce= state(:,end); % [m]
+%lmtc= state(:,end-1); % [m]
+%lmtcd= state(:,end); % [m]
+
 
 % initialise stated and optional output
 check = zeros(length(check0),length(t));
@@ -191,7 +199,7 @@ if diagnostics == true
 end
 
 for i=1:length(t)
-    [stated(:,i),y(:,i),check(:,i),x,n,dndt] = hux_tutorial(t(i),state(i,:)',parms);
+    [stated(:,i),y(:,i),check(:,i),x,n,dndt] = hux_tutorial_kinematic_quasi_hatze(t(i),state(i,:)',parms);
     if diagnostics==true && mod(i-1,5)==0 % every 5 samples
         plot3(x,ones(size(x))*t(i),n);hold on
         xlabel x; ylabel t; zlabel n
@@ -202,8 +210,8 @@ ylim([0 t(end)])
 zlim([0 1])
 % handle output
 stated=stated'; y=y';
-gammad = stated(:,end-3);
-lced = stated(:,end-2); %[m/s]
+gammad = stated(:,end-1);
+lced = stated(:,end); %[m/s]
 
 % unravel y
 Fmax=parms.Fmax;
@@ -215,6 +223,10 @@ fse=y(:,5); %[N]
 fisomrel=y(:,6); %[]
 p_cb=y(:,7); %[W]
 p_act=y(:,8); %[W]
+lmtc=y(:,9); %[m]
+lmtcd=y(:,10); %[m/s]
+lse=lmtc-lce; % [m]
+
 fcerel = fce/parms.Fmax;
 fperel = fpe/parms.Fmax;
 fserel = fse/parms.Fmax;
@@ -228,9 +240,9 @@ ce_work=cumtrapz(-lce,fce); %[J]
 se_work=cumtrapz(-lse,fse); %[J]
 pe_work=cumtrapz(-lce,fpe); %[J]
 lmtc_work=cumtrapz(-lmtc,fse); %[J]
-Ekin = .5*parms.mass*lmtcd.^2; %[J]
-Ekin = Ekin-Ekin(1);
-W_grav = -parms.mass*(lmtc-lmtc(1))*-9.81; %[J]
+%Ekin = .5*parms.mass*lmtcd.^2; %[J]
+%Ekin = Ekin-Ekin(1);
+%W_grav = -parms.mass*(lmtc-lmtc(1))*-9.81; %[J]
 
 %% diagnostics
 if diagnostics == true
@@ -252,7 +264,7 @@ if diagnostics == true
     xlabel ('time [s]')
     ylabel ('dF_c_e/dt + dF_p_e/dt - dF_s_e/dt [N/s]')
     subplot(223)
-    plot (t,[ce_work+se_work+pe_work-lmtc_work Ekin-W_grav-lmtc_work])
+    plot (t,[ce_work+se_work+pe_work-lmtc_work])
     title('energy errors')
     xlabel ('time [s]')
     ylabel ('energy [J]')
@@ -291,7 +303,7 @@ if normFig==true
     grid
     subplot(224)
     %yyaxis left
-    plot(t,[ce_work pe_work se_work lmtc_work Ekin W_grav])
+    plot(t,[ce_work pe_work se_work lmtc_work])
     title('mechanical energy/work')
     ylabel ('mechanical work [J]')
     xlabel('Time [s]')
@@ -302,7 +314,8 @@ if normFig==true
     title('metabolic power')
     ylabel ('metabolic power [normalized]')
     xlabel('Time [s]')
-    legend('P_c_b','P_a_c_t')    
+    legend('P_c_b','P_a_c_t')
+    
     
     figure
     subplot(221)
@@ -361,7 +374,7 @@ if Animate
         
         plot([0 0],[0 -lce(iSample)],'r','linewidth',2);
         plot([0 0],[-lce(iSample) -lmtc(iSample)],'b','linewidth',2);
-        plot(0,-lmtc(iSample),'ko','linewidth',8); hold off
+        plot([-.015 .015],[-lmtc(iSample) -lmtc(iSample)],'k','linewidth',1.5); hold off
         drawnow
         
         % for video

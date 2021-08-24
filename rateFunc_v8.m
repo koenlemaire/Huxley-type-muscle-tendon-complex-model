@@ -18,7 +18,7 @@ idx_g1=x>0;
 hvs_steepness=50;
 hvs_f1=1./(1+exp(hvs_steepness*(x-1))); % centered around x=1, left asymptote is 1
 hvs_g2=1./(1+exp(hvs_steepness*x)); % centered around x=0, left asymptote is 1
-hvs_g3=1./(1+exp(-hvs_steepness*(x-1))); % centered around x=1, right asymptote is 1
+hvs_g3=1./(1+exp(-hvs_steepness*(x-1.2))); % centered around x=1.2, right asymptote is 1
 
 %% gx 
 % halfway point, as measured from minimum value: x_halfway = a^(1/n)

@@ -5,6 +5,24 @@
 % make sure parms.scale_factor exists for huxley model and parameters
 % for isometric force length relation exist for Hill model.
 
+% !! CRITICAL NOTE:
+% the success of the optimization depends wholy on the chosen bounds (lb
+% and ub) or region where the optmizer is allowed to look. If you make
+% changes in the Hill F-v curve, it is likely you have to make some changes
+% in the bounds to accomodate the new parameters; it is generally desired
+% to choose these bounds as tightly as possible around the optimum because
+% then the algorithm can and will converge quicker and more precisely. This
+% is mostly a matter of trial and error, ie if you notice the optimal
+% solution does not look very optimal and one the parameters runs into its
+% bound you should increase the bound. Conversely if the algorithm is slow
+% to converge or doesn't converge well, try tightening the bounds. In
+% general, quite good correspondance (cost ~ 0.01) should be possible for
+% a range of Hill F-v curves, note that this also depends on the rate
+% functions and on the hill F-v curve. In general the huxley curve will not
+% deal well large (>1.5) slopefac values, note though that the
+% high frequency behaviour (stiffness) in the Huxley model is different
+% from the F-V relation calculated here ... 
+
 %% parameters and initial conditions
 clear; clc; 
 parms.Fmax=1;
@@ -20,8 +38,8 @@ parms.width=.56;
 parms.C=-1/parms.width^4;
 parms.C=-parms.width.^(1/4);
 parms.qmin=1e-10;
-Arel=1;
-Brel=5;
+Arel=0.41;
+Brel=5.2;
 Fasymp=1.5;
 slopfac=1.2;
 
@@ -35,8 +53,7 @@ parms.slopfac=slopfac;
 parms.Arel=Arel;
 parms.Brel=Brel;
 
-fce=linspace(0,0.9*Fasymp,1000)';
-%fce=[linspace(.95,.995,10) linspace(1.005,1.05,10)]';
+fce=linspace(0,0.95*Fasymp,2000)';
 lcerel=1;
 fisomrel=1;
 q=1;
@@ -50,8 +67,8 @@ end
 parms.hillData = [vcerel fce];
 parms.hux_vce=linspace(vcerel(2),vcerel(end-1),20)'; % 20 querie points
 parms.hux_vce=parms.hux_vce(parms.hux_vce~=0); % make sure no zeros in here ...
-lb=[10 10 10 10]/tmpscale; % our best guess so far ...
-ub=[5e2 1e3 1e4 1e3]/tmpscale; % f1 g1 g2 g3 
+lb=[5e2 1e2 1e3 1e2]; % 
+ub=[1.5e3 7e2 5e3 1.5e3]; % f1 g1 g2 g3 
 
 x_init=(lb+ub)/2; % just in the middle of our space ...
 parms.x_init=x_init;
@@ -112,7 +129,6 @@ huxleyParms=scale_x(xrel,'rel_to_abs',parms);
 
 parms.dispFig = true;
 [cost]=calculateHuxleyError(xrel,parms);
-keyboard    % check stuff when finished ...
 
 
 function [lcereld,regime] = lcereldotnew_v2(lcerel,fce,fisomrel,q,parms)
@@ -269,7 +285,6 @@ function [ error ] = calculateHuxleyError( huxleyParms,parms )
 
 %read out parameters
 huxleyParms=abs(scale_x(huxleyParms,'rel_to_abs',parms));
-scaletmp=10;
 parms.f1 = huxleyParms(1);
 parms.g1 = huxleyParms(2);
 parms.g2 = huxleyParms(3);
