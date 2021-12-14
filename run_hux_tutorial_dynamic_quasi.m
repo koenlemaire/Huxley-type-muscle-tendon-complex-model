@@ -32,8 +32,8 @@
 
 % -
 clear
-%close all
-%clc
+close all
+clc
 
 % sort out pathing and stuff
 tmp = mfilename('fullpath');
@@ -180,13 +180,15 @@ for i=1:length(t)
         xlabel x; ylabel t; zlabel('local eigenvalue')
     end
 end
-subplot(121)
-xlim([-5 5])
-ylim([0 t(end)])
-zlim([0 1])
-subplot(122)
-xlim([-5 5])
-ylim([0 t(end)])
+if diagnostics==true
+    subplot(121)
+    xlim([-5 5])
+    ylim([0 t(end)])
+    zlim([0 1])
+    subplot(122)
+    xlim([-5 5])
+    ylim([0 t(end)])
+end
 
 % handle output
 stated=stated'; y=y';

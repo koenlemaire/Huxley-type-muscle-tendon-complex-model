@@ -15,8 +15,8 @@
 % Journal of Experimental Biology, 219, 977-987. DOI: 10.1242/jeb.128280   
 
 clear
-%close all
-%clc
+close all
+clc
 
 % sort out pathing and stuff
 tmp = mfilename('fullpath');

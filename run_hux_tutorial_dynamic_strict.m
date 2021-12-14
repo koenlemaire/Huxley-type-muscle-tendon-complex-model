@@ -172,7 +172,6 @@ lmtc= state(:,end-1); % [m]
 lmtcd= state(:,end); % [m]
 
 % initialise stated and optional output
-check = zeros(length(check0),length(t));
 stated=zeros(size(state'));
 y = zeros(length(y0),length(t));
 % output block
